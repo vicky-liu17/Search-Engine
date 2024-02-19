@@ -17,6 +17,7 @@ public class PostingsEntry implements Comparable<PostingsEntry>, Serializable {
 
     public int docID;
     public double score = 0;
+    public final ArrayList<Integer> positions = new ArrayList<>();
 
     /**
      *  PostingsEntries are compared by their score (only relevant
@@ -29,9 +30,30 @@ public class PostingsEntry implements Comparable<PostingsEntry>, Serializable {
        return Double.compare( other.score, score );
     }
 
+    public PostingsEntry(int docID) {
+        this.docID = docID;
+    }
 
-    //
-    // YOUR CODE HERE
-    //
+    public PostingsEntry(int docID, int position){
+        this.docID = docID;
+        addPosition(position);
+    }
+
+    public void addPosition(int position) {
+        positions.add(position);
+    }
+
+    public ArrayList<Integer> getPositions() {
+        return positions;
+    }
+
+    public int getDocID(){
+        return docID;
+    }
+
+    public double getScore(){ 
+        return score;
+    }
+    
 }
 

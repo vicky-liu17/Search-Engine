@@ -17,16 +17,17 @@ public class PostingsList {
 
     /** Number of postings in this list. */
     public int size() {
-    return list.size();
+        return list.size();
     }
 
     /** Returns the ith posting. */
     public PostingsEntry get( int i ) {
-    return list.get( i );
+        return list.get( i );
     }
 
-    // 
-    //  YOUR CODE HERE
-    //
+    /** Inserts a PostingsEntry into the list and updates the docIDsSet. */
+    public void insert(PostingsEntry entry) {
+        list.add(entry);
+    }
 }
 
