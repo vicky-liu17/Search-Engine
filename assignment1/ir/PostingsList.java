@@ -5,29 +5,29 @@
  *   Johan Boye, 2017
  */  
 
-package ir;
+ package ir;
 
-import java.util.ArrayList;
-
-public class PostingsList {
-    
-    /** The postings list */
-    private ArrayList<PostingsEntry> list = new ArrayList<PostingsEntry>();
-
-
-    /** Number of postings in this list. */
-    public int size() {
-        return list.size();
-    }
-
-    /** Returns the ith posting. */
-    public PostingsEntry get( int i ) {
-        return list.get( i );
-    }
-
-    /** Inserts a PostingsEntry into the list and updates the docIDsSet. */
-    public void insert(PostingsEntry entry) {
-        list.add(entry);
-    }
-}
-
+ import java.util.ArrayList;
+ 
+ public class PostingsList {
+     
+     /** The postings list */
+     private ArrayList<PostingsEntry> list = new ArrayList<PostingsEntry>();
+ 
+ 
+     /** Number of postings in this list. */
+     public int size() {
+         return list.size();
+     }
+ 
+     /** Returns the ith posting. */
+     public PostingsEntry get( int i ) {
+         return list.get( i );
+     }
+ 
+     /** Inserts a PostingsEntry into the list and updates the docIDsSet. */
+     public void insert(PostingsEntry entry) {
+         list.add(entry);
+     }
+ }
+ 
