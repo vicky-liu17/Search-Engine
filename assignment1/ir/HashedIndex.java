@@ -9,7 +9,6 @@
 package ir;
 
 import java.util.HashMap;
-import java.util.Iterator;
 
 
 /**
@@ -47,13 +46,6 @@ public class HashedIndex implements Index {
      */
     public PostingsList getPostings( String token ) {
         return index.get(token);
-    }
-
-    /**
-     * * Returns the number of documents in the index.
-     * */
-    public int getNumberOfDocuments() {
-        return docLengths.size();
     }
 
     /**

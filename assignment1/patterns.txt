@@ -49,7 +49,7 @@
 ([a-z]\.)+[a-z]\.
 
 //Files
-[a-zA-Z0-9_]+\.[a-z]+
+[a-zA-Z0-9_-]+\.[a-zA-Z0-9]+
 
 // Words with hypen
 [a-zA-Z]+-[a-zA-Z]+
