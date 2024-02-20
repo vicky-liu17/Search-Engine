@@ -3,8 +3,6 @@
  *   Information Retrieval course at KTH.
  *
  *   Johan Boye, 2017
- *
- *   Edited by Hasti Mohebali Zadeh, 2023
  */
 
 package ir;
