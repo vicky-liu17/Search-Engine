@@ -32,6 +32,23 @@ public class Searcher {
         //
         //  REPLACE THE STATEMENT BELOW WITH YOUR CODE
         //
+        // System.out.println("Begin search:");
+        
+        // PostingsList[] lists = getPostingsLists(query);
+        
         return null;
     }
+
+    public PostingsList[] getPostingsLists(Query query) {
+        PostingsList[] lists = new PostingsList[query.size()];
+        for (int i = 0; i < query.size(); ++i) {
+            lists[i] = index.getPostings(query.queryterm.get(i).term);
+      
+            if (lists[i] == null) {
+                lists[i] = new PostingsList();
+            }
+        }
+        return lists;
+    }
+    
 }
