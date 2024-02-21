@@ -152,40 +152,19 @@ public class Searcher {
         }
         return answer;
     }
-
-    public PostingsList intersect(PostingsList p1, PostingsList p2) {
-        // Create a new PostingsList to store the intersection results.
-        final PostingsList answer = new PostingsList();
-
-        // Initialize iterators for both input postings lists.
-        Iterator<PostingsEntry> iterator1 = p1.iterator();
-        Iterator<PostingsEntry> iterator2 = p2.iterator();
-
-        // Start with the first entry in each list, assuming non-empty lists.
-        if (iterator1.hasNext() && iterator2.hasNext()) {
-            PostingsEntry e1 = iterator1.next();
-            PostingsEntry e2 = iterator2.next();
-
-            // Continue as long as both postings lists have elements.
-            while (iterator1.hasNext() && iterator2.hasNext()) {
-                // Compare the document IDs of the current entries.
-                int docId1 = e1.docID;
-                int docId2 = e2.docID;
-
-                // If the document IDs match, add the entry to the result list.
-                if (docId1 == docId2) {
-                    answer.insert(e1); // Add the entry from the first list as an example.
-                    // Move to the next entries in both postings lists.
-                    e1 = iterator1.next();
-                    e2 = iterator2.next();
-                } else if (docId1 < docId2) {
-                    // If the first document ID is less than the second, move to the next entry in
-                    // the first list.
-                    e1 = iterator1.next();
+    public PostingsList intersect(PostingsList list1, PostingsList list2) {
+        PostingsList answer = new PostingsList();
+        int index1 = 0, index2 = 0;
+        while (index1 < list1.size() && index2 < list2.size()) {
+            if (list1.get(index1).docID == list2.get(index2).docID) {
+                answer.insert(new PostingsEntry(list1.get(index1).docID));
+                index1++;
+                index2++;
+            } else {
+                if (list1.get(index1).docID < list2.get(index2).docID) {
+                    index1++;
                 } else {
-                    // If the second document ID is less than the first, move to the next entry in
-                    // the second list.
-                    e2 = iterator2.next();
+                    index2++;
                 }
             }
         }

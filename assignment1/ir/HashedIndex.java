@@ -25,7 +25,7 @@ public class HashedIndex implements Index {
      * */
     public void insert(String token, int docID, int offset) {
         // System.out.println("token: ") ;
-        // System.out.println(token);
+        //System.out.println(token);
         // Create a new PostingsEntry
         PostingsEntry entry = new PostingsEntry(docID, offset);
         // Check if the token already exists in the index
