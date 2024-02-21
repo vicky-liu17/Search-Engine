@@ -1,0 +1,3 @@
+1 Elaine_Kasimatis.f 1 (This is a graduate of a mathematics program, perhaps somewhat relevant to the query?)
+1 Evelyn_Silvia.f 1 (This document describes a mathematics professor with a Master of Arts degree in Mathematics who created a graduate program for training mathematics teachers, perhaps somewhat relevant to the query?)
+1 Statistics.f 2 (The description is not about a mathematics program specifically, but statistics is closely related to mathematics. I'm curious if it is "Fairly relevant" or "Marginally relevant".)

@@ -15,7 +15,7 @@ public class PostingsEntry implements Comparable<PostingsEntry>, Serializable {
 
     public double score = 0;
 
-    public final ArrayList<Integer> positions = new ArrayList<>();
+    public ArrayList<Integer> positions = new ArrayList<>();
 
     /**
      * PostingsEntries are compared by their score (only relevant

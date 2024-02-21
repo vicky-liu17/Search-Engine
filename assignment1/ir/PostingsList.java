@@ -12,7 +12,7 @@ public class PostingsList implements Iterable<PostingsEntry>{
     /**
      * The postings list
      */
-    private final List<PostingsEntry> list = new ArrayList<>();
+    private ArrayList<PostingsEntry> list = new ArrayList<PostingsEntry>();
 
     /**
      * Number of postings in this list.
