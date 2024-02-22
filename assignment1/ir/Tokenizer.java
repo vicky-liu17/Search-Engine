@@ -136,9 +136,15 @@ public class Tokenizer {
      */
     private void readPatterns(String filename) {
         patterns = new ArrayList<Pattern>();
+        // System.out.println(filename);
+        // System.out.println(filename.equals("patterns.txt")); 
+        // System.out.println("First one: ");
+        // System.out.println(Arrays.toString(filename.getBytes()));
+        // System.out.println("Second one: ");
+        // System.out.println(Arrays.toString("patterns.txt".getBytes()));
         String line = null;
         try {
-            BufferedReader in = new BufferedReader(new FileReader("patterns.txt"));
+            BufferedReader in = new BufferedReader(new FileReader(filename.trim()));
             while ((line = in.readLine()) != null) {
                 line = line.trim();
                 if (!line.startsWith("//") && line.length() > 0) {
