@@ -9,9 +9,11 @@ package ir;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.stream.Collectors;
 
 public class PostingsEntry implements Comparable<PostingsEntry>, Serializable {
-    public final int docID;
+    public int docID;
 
     public double score = 0;
 
@@ -28,6 +30,9 @@ public class PostingsEntry implements Comparable<PostingsEntry>, Serializable {
         return Double.compare(other.score, score);
     }
 
+    public PostingsEntry() {
+    }
+
     public PostingsEntry(int docID) {
         this.docID = docID;
     }
@@ -39,6 +44,10 @@ public class PostingsEntry implements Comparable<PostingsEntry>, Serializable {
 
     public void addPosition(int position) {
         positions.add(position);
+    }
+
+    public void setPositions(ArrayList<Integer> positions) {
+        this.positions = positions;
     }
 
     public PostingsEntry(int docID, ArrayList<Integer> positions) {
@@ -61,4 +70,23 @@ public class PostingsEntry implements Comparable<PostingsEntry>, Serializable {
     public double getScore() {
         return score;
     }
+
+    public String toString() {
+        String positionsString = positions.stream()
+                .map(Object::toString)
+                .collect(Collectors.joining(","));
+        return docID + ":" + positionsString;
+    }
+
+    public PostingsEntry(String data) {
+        String[] fields = data.split(":");
+        this.docID = Integer.parseInt(fields[0]);
+
+        String[] wordStringPositions = fields[1].split(",");
+        this.positions = new ArrayList<>(wordStringPositions.length);
+        for (String pos : wordStringPositions) {
+            this.positions.add(Integer.parseInt(pos));
+        }
+    }
+
 }

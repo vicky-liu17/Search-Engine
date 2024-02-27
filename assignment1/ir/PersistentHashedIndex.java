@@ -3,14 +3,15 @@
  *   Information Retrieval course at KTH.
  * 
  *   Johan Boye, KTH, 2018
- */  
+ */
 
 package ir;
 
 import java.io.*;
 import java.util.*;
 import java.nio.charset.*;
-
+import java.time.Duration;
+import java.time.Instant;
 
 /*
  *   Implements an inverted index as a hashtable on disk.
@@ -53,148 +54,186 @@ public class PersistentHashedIndex implements Index {
     long free = 0L;
 
     /** The cache as a main-memory hash map. */
-    HashMap<String,PostingsList> index = new HashMap<String,PostingsList>();
-
+    HashMap<String, PostingsList> index = new HashMap<String, PostingsList>();
 
     // ===================================================================
 
     /**
-     *   A helper class representing one entry in the dictionary hashtable.
-     */ 
+     * A helper class representing one entry in the dictionary hashtable.
+     */
     public class Entry {
-        //
-        //  YOUR CODE HERE
-        //
-    }
+        long ptr;
+        int size;
 
+        public Entry(long ptr, int size) {
+            this.ptr = ptr;
+            this.size = size;
+        }
+    }
 
     // ==================================================================
 
-    
     /**
-     *  Constructor. Opens the dictionary file and the data file.
-     *  If these files don't exist, they will be created. 
+     * Constructor. Opens the dictionary file and the data file.
+     * If these files don't exist, they will be created.
      */
     public PersistentHashedIndex() {
         try {
-            dictionaryFile = new RandomAccessFile( INDEXDIR + "/" + DICTIONARY_FNAME, "rw" );
-            dataFile = new RandomAccessFile( INDEXDIR + "/" + DATA_FNAME, "rw" );
-        } catch ( IOException e ) {
+            // create the directory
+            File indexDir = new File(INDEXDIR);
+            if (!indexDir.exists()) {
+                if (!indexDir.mkdirs()) {
+                    System.err.println("Failed to create index directory.");
+                    return;
+                }
+            }
+
+            dictionaryFile = new RandomAccessFile(INDEXDIR + "/" + DICTIONARY_FNAME, "rw");
+            dataFile = new RandomAccessFile(INDEXDIR + "/" + DATA_FNAME, "rw");
+        } catch (IOException e) {
             e.printStackTrace();
         }
 
         try {
             readDocInfo();
-        } catch ( FileNotFoundException e ) {
-        } catch ( IOException e ) {
+        } catch (FileNotFoundException e) {
+        } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
     /**
-     *  Writes data to the data file at a specified place.
+     * Writes data to the data file at a specified place.
      *
-     *  @return The number of bytes written.
-     */ 
-    int writeData( String dataString, long ptr ) {
+     * @return The number of bytes written.
+     */
+    int writeData(String dataString, long ptr) {
         try {
-            dataFile.seek( ptr ); 
+            dataFile.seek(ptr);
             byte[] data = dataString.getBytes();
-            dataFile.write( data );
+            dataFile.write(data);
             return data.length;
-        } catch ( IOException e ) {
+        } catch (IOException e) {
             e.printStackTrace();
             return -1;
         }
     }
 
-
     /**
-     *  Reads data from the data file
-     */ 
-    String readData( long ptr, int size ) {
+     * Reads data from the data file
+     */
+    String readData(long ptr, int size) {
         try {
-            dataFile.seek( ptr );
+            dataFile.seek(ptr);
             byte[] data = new byte[size];
-            dataFile.readFully( data );
+            dataFile.readFully(data);
             return new String(data);
-        } catch ( IOException e ) {
+        } catch (IOException e) {
             e.printStackTrace();
             return null;
         }
     }
 
-
     // ==================================================================
     //
-    //  Reading and writing to the dictionary file.
+    // Reading and writing to the dictionary file.
 
     /*
-     *  Writes an entry to the dictionary hash table file. 
+     * Writes an entry to the dictionary hash table file.
      *
-     *  @param entry The key of this entry is assumed to have a fixed length
-     *  @param ptr   The place in the dictionary file to store the entry
+     * @param entry The key of this entry is assumed to have a fixed length
+     * 
+     * @param ptr The place in the dictionary file to store the entry
      */
-    void writeEntry( Entry entry, long ptr ) {
-        //
-        //  YOUR CODE HERE
-        //
+    void writeEntry(Entry entry, long ptr) {
+        try {
+
+            // In this implementation, each entry consists of a long (8 bytes) for the
+            // pointer and an int (4 bytes) for the size, totaling 12 bytes.
+            ptr *= 12;
+            dictionaryFile.seek(ptr);
+            dictionaryFile.writeLong(entry.ptr);
+            // Move the file pointer to 8 bytes ahead to get the entry.size(long (8 bytes))
+            dictionaryFile.seek(ptr + 8);
+            dictionaryFile.writeInt(entry.size);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     /**
-     *  Reads an entry from the dictionary file.
+     * Reads an entry from the dictionary file.
      *
-     *  @param ptr The place in the dictionary file where to start reading.
+     * @param ptr The place in the dictionary file where to start reading.
      */
-    Entry readEntry( long ptr ) {   
-        //
-        //  REPLACE THE STATEMENT BELOW WITH YOUR CODE 
-        //
+    Entry readEntry(long ptr) {
+        try {
+            // Multiplying the hash value by the entry size provides an offset that
+            // accurately positions the read operation at the beginning of the data
+            // associated with the hash value within the storage structure. This ensures
+            // that the read operation retrieves the correct data, accounting for the fact
+            // that each slot in the hash table may contain multiple entries, and each entry
+            // has a specific size.
+            ptr *= 12;
+            dictionaryFile.seek(ptr);
+            long entry_ptr = dictionaryFile.readLong();
+            dictionaryFile.seek(ptr + 8);
+            int entry_size = dictionaryFile.readInt();
+            Entry entry = new Entry(entry_ptr, entry_size);
+            return entry;
+        } catch (IOException e) {
+        }
         return null;
     }
 
-
     // ==================================================================
 
     /**
-     *  Writes the document names and document lengths to file.
+     * Writes the document names and document lengths to file.
      *
-     * @throws IOException  { exception_description }
+     * @throws IOException { exception_description }
      */
     private void writeDocInfo() throws IOException {
-        FileOutputStream fout = new FileOutputStream( INDEXDIR + "/docInfo" );
-        for ( Map.Entry<Integer,String> entry : docNames.entrySet() ) {
+        // create the directory
+        File indexDir = new File(INDEXDIR);
+        if (!indexDir.exists()) {
+            if (!indexDir.mkdirs()) {
+                System.err.println("Failed to create index directory.");
+                return;
+            }
+        }
+
+        FileOutputStream fout = new FileOutputStream(INDEXDIR + "/docInfo");
+        for (Map.Entry<Integer, String> entry : docNames.entrySet()) {
             Integer key = entry.getKey();
             String docInfoEntry = key + ";" + entry.getValue() + ";" + docLengths.get(key) + "\n";
-            fout.write( docInfoEntry.getBytes() );
+            fout.write(docInfoEntry.getBytes());
         }
         fout.close();
     }
 
-
     /**
-     *  Reads the document names and document lengths from file, and
-     *  put them in the appropriate data structures.
+     * Reads the document names and document lengths from file, and
+     * put them in the appropriate data structures.
      *
-     * @throws     IOException  { exception_description }
+     * @throws IOException { exception_description }
      */
     private void readDocInfo() throws IOException {
-        File file = new File( INDEXDIR + "/docInfo" );
+        File file = new File(INDEXDIR + "/docInfo");
         FileReader freader = new FileReader(file);
-        try ( BufferedReader br = new BufferedReader(freader) ) {
+        try (BufferedReader br = new BufferedReader(freader)) {
             String line;
             while ((line = br.readLine()) != null) {
                 String[] data = line.split(";");
-                docNames.put( new Integer(data[0]), data[1] );
-                docLengths.put( new Integer(data[0]), new Integer(data[2]) );
+                docNames.put(new Integer(data[0]), data[1]);
+                docLengths.put(new Integer(data[0]), new Integer(data[2]));
             }
         }
         freader.close();
     }
 
-
     /**
-     *  Write the index to files.
+     * Write the index to files.
      */
     public void writeIndex() {
         int collisions = 0;
@@ -203,49 +242,134 @@ public class PersistentHashedIndex implements Index {
             writeDocInfo();
 
             // Write the dictionary and the postings list
+            for (String key : index.keySet()) {
+                // Find empty slot in dictionary
+                long hashValue = calculateHash(key);
+                while (entryExists(hashValue)) {
+                    hashValue = (hashValue + 1) % TABLESIZE;
+                    collisions++;
+                }
+                // Write to dataFile
+                String data = key + " " + index.get(key).toString() + "\n";
+                int size = writeData(data, free);
 
-            // 
-            //  YOUR CODE HERE
-            //
-        } catch ( IOException e ) {
+                // Write to dictionaryFile
+                Entry entry = new Entry(free, size);
+                writeEntry(entry, hashValue);
+
+                free += size;
+            }
+        } catch (IOException e) {
             e.printStackTrace();
         }
-        System.err.println( collisions + " collisions." );
+        System.err.println(collisions + " collisions.");
     }
-
 
     // ==================================================================
 
-
     /**
-     *  Returns the postings for a specific term, or null
-     *  if the term is not in the index.
+     * Returns the postings for a specific term, or null
+     * if the term is not in the index.
      */
-    public PostingsList getPostings( String token ) {
-        //
-        //  REPLACE THE STATEMENT BELOW WITH YOUR CODE
-        //
+    public PostingsList getPostings(String token) {
+        // Calculate the hash value of the token
+        long hashValue = calculateHash(token);
+
+        // Iterate through the hash table until an entry with the given token is found
+        // or the end is reached
+        while (entryExists(hashValue)) {
+            // Read the entry at the calculated hash position
+            Entry entry = readEntry(hashValue);
+
+            // Read the data associated with the entry
+            String[] data = readData(entry.ptr, entry.size).split(" ");
+            System.out.println(data[0]);
+            System.out.println(data[1]);
+
+            // Check if the first element of the data array matches the token
+            if (data[0].equals(token)) {
+                // If a match is found, return the associated postings list
+                return new PostingsList(data[1].trim());
+            }
+
+            // If no match is found, move to the next slot in the hash table
+            hashValue++;
+        }
+
+        // If the loop completes without finding a match, return null
         return null;
     }
 
-
     /**
-     *  Inserts this token in the main-memory hashtable.
+     * Inserts this token in the main-memory hashtable.
      */
-    public void insert( String token, int docID, int offset ) {
-        //
-        //  YOUR CODE HERE
-        //
+    public void insert(String token, int docID, int offset) {
+        // Create a new PostingsEntry
+        PostingsEntry entry = new PostingsEntry(docID, offset);
+        // Check if the token already exists in the index
+        if (index.containsKey(token)) {
+            // If the token exists, get its postings list and add the new entry
+            PostingsList postingsList = index.get(token);
+            postingsList.insert(entry);
+        } else {
+            // If the token doesn't exist, create a new postings list and add the entry
+            PostingsList postingsList = new PostingsList();
+            postingsList.insert(entry);
+            index.put(token, postingsList);
+        }
     }
 
+    /**
+     * Calculates the hash value for the given input string using a custom hash
+     * algorithm.
+     * 
+     * @param input The input string for which the hash value is to be calculated.
+     * @return The calculated hash value.
+     */
+    public long calculateHash(String input) {
+        // Initialize the hash value to a prime number (7 is commonly used)
+        long hashValue = 7;
+
+        // Iterate through each character in the input string
+        for (char character : input.toCharArray()) {
+            // Update the hash value using a custom hash algorithm:
+            // 1. Multiply the current hash value by a prime number (103 is commonly used)
+            // 2. Add the ASCII value of the character to the hash value
+            // 3. Take the modulo of TABLE_SIZE to keep the hash value within the range
+            hashValue = (hashValue * 103 + character) % TABLESIZE;
+        }
+
+        // Return the calculated hash value
+        return hashValue;
+    }
 
     /**
-     *  Write index to file after indexing is done.
+     * Checks if an entry exists for the given hash value.
+     * 
+     * @param hashValue The hash value used to locate the entry.
+     * @return True if an entry exists, false otherwise.
      */
+    public boolean entryExists(long hashValue) {
+        Entry entry = readEntry(hashValue);
+        return entry != null && entry.ptr != 0 && entry.size != 0;
+    }
+
+    /**
+     * Write index to file after indexing is done.
+     */
+
     public void cleanup() {
-        System.err.println( index.keySet().size() + " unique words" );
-        System.err.print( "Writing index to disk..." );
+        System.err.println(index.keySet().size() + " unique words");
+        System.err.print("Writing index to disk...");
+
+        Instant startTime = Instant.now();
         writeIndex();
-        System.err.println( "done!" );
+        Instant endTime = Instant.now();
+
+        System.err.println("done!");
+
+        Duration duration = Duration.between(startTime, endTime);
+        System.err.println("Use " + duration.getSeconds() + "." + duration.getNano() + " seconds.");
     }
+
 }

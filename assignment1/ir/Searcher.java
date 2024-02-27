@@ -48,7 +48,6 @@ public class Searcher {
     public List<PostingsList> getPostingsLists(Query query) {
         List<PostingsList> postings = new ArrayList<>();
         for (int i = 0; i < query.size(); ++i) {
-            //System.out.println(query.queryterm.get(i).term);
             PostingsList list = index.getPostings(query.queryterm.get(i).term);
             if (list == null) {
                 list = new PostingsList();
@@ -152,15 +151,26 @@ public class Searcher {
         }
         return answer;
     }
+
     public PostingsList intersect(PostingsList list1, PostingsList list2) {
+        // Create a new PostingsList to store the intersection result
         PostingsList answer = new PostingsList();
+
+        // Initialize two pointers to iterate over list1 and list2
         int index1 = 0, index2 = 0;
+
+        // Iterate through both lists until one of them is fully processed
         while (index1 < list1.size() && index2 < list2.size()) {
+            // If the document IDs at the current positions are equal, add the document ID
+            // to the result and move both pointers forward
             if (list1.get(index1).docID == list2.get(index2).docID) {
                 answer.insert(new PostingsEntry(list1.get(index1).docID));
                 index1++;
                 index2++;
             } else {
+                // If the document ID in list1 is smaller than in list2, move the pointer of
+                // list1 forward
+                // Otherwise, move the pointer of list2 forward
                 if (list1.get(index1).docID < list2.get(index2).docID) {
                     index1++;
                 } else {
@@ -168,6 +178,9 @@ public class Searcher {
                 }
             }
         }
+
+        // Return the intersection result
         return answer;
     }
+
 }

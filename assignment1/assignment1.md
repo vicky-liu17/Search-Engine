@@ -160,3 +160,42 @@ $$Recall = \frac{0}{100} = 0$$
 
 - **Why can we not simply set the query to be the entire information need description?**
 - Setting the query to be the entire information need description, such as "Info about the education in Mathematics on a graduate level at UC Davis," might not be optimal for several reasons. Firstly, the query may contain unnecessary or ambiguous terms that could lead to irrelevant search results. Additionally, users may not always articulate their information needs in a concise and clear manner, leading to overly broad queries. Moreover, search engines typically work more effectively with shorter, focused queries that contain key terms directly related to the user's intent, rather than lengthy and verbose descriptions. Lastly, including the entire information need description as the query may limit the search engine's ability to retrieve relevant results by not accounting for variations in language or terminology. Therefore, employing a more concise and targeted query approach is generally preferred for effective information retrieval.
+
+
+### Task 1.7
+
+- When storing the hashmap to disk, we iterate through its keys and save each PostingsList in a data file. Each new PostingsList is placed after all previously stored lists. To map a key to its corresponding PostingsList, we hash the key (token) and store the pointer to the PostingsList in a dictionary file at the hashed position.
+
+- During retrieval, we hash the token, navigate to the hashed position in the dictionary, and inspect the position in the data file to check if it holds the correct PostingsList. If it does, we parse and return it. If not, we move to the next hash slot until we find the correct one (to handle collisions) or until an empty slot is encountered (indicating that no such token exists).
+
+The provided code implements a hash function using the multiplicative hashing method. Here's a brief explanation:
+
+```c
+// Define a hash function named HashMultiplicative that takes a key (a character array) and its length as input
+UINT HashMultiplicative(const CHAR *key, SIZE_T len) {
+   // Initialize the hash value to some initial value (INITIAL_VALUE)
+   UINT hash = INITIAL_VALUE;
+   
+   // Iterate through each character in the key
+   for(UINT i = 0; i < len; ++i)
+      // Update the hash value using the multiplicative hashing algorithm:
+      // 1. Multiply the current hash value by a constant multiplier (M)
+      // 2. Add the ASCII value of the current character to the hash value
+      hash = M * hash + key[i];
+   
+   // Take the modulo of the hash value with TABLE_SIZE to ensure it falls within the desired range
+   return hash % TABLE_SIZE;
+}
+```
+
+Explanation:
+- The function takes a key (represented as a character array) and its length as input.
+- It initializes the hash value to some initial value (INITIAL_VALUE).
+- It iterates through each character in the key.
+- For each character, it updates the hash value using the multiplicative hashing algorithm, which involves multiplying the current hash value by a constant multiplier (M) and adding the ASCII value of the character.
+- Finally, it takes the modulo of the resulting hash value with TABLE_SIZE to ensure that the hash value falls within the desired range.
+
+
+The constants 7 and 103 are chosen for their effectiveness in generating unique hash values and reducing collisions. 
+- The prime number 7 is used as the initial value to distribute hash values evenly across the table. Using a prime number as the initial value helps reduce patterns in multiplication, which can lead to fewer collisions and a more uniform distribution of hash values.
+- The prime number 103 is used as the multiplier to amplify differences between characters in the input, aiding in uniform distribution. Prime numbers are preferred as multipliers because they help in spreading out the hash values more uniformly. Additionally, 103 is relatively large enough to amplify differences between the characters in the input string, but not too large to cause overflow issues or excessive computational complexity.
