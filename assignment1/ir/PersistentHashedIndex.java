@@ -107,11 +107,11 @@ public class PersistentHashedIndex implements Index {
      *
      * @return The number of bytes written.
      */
-    int writeData(String dataString, long ptr) {
+    int writeData(RandomAccessFile dataFileToWrite, String dataString, long ptr) {
         try {
-            dataFile.seek(ptr);
+            dataFileToWrite.seek(ptr);
             byte[] data = dataString.getBytes();
-            dataFile.write(data);
+            dataFileToWrite.write(data);
             return data.length;
         } catch (IOException e) {
             e.printStackTrace();
@@ -193,7 +193,7 @@ public class PersistentHashedIndex implements Index {
      *
      * @throws IOException { exception_description }
      */
-    private void writeDocInfo() throws IOException {
+    public void writeDocInfo(String foutFileName) throws IOException {
         // create the directory
         File indexDir = new File(INDEXDIR);
         if (!indexDir.exists()) {
@@ -203,7 +203,7 @@ public class PersistentHashedIndex implements Index {
             }
         }
 
-        FileOutputStream fout = new FileOutputStream(INDEXDIR + "/docInfo");
+        FileOutputStream fout = new FileOutputStream(foutFileName);
         for (Map.Entry<Integer, String> entry : docNames.entrySet()) {
             Integer key = entry.getKey();
             String docInfoEntry = key + ";" + entry.getValue() + ";" + docLengths.get(key) + "\n";
@@ -218,7 +218,7 @@ public class PersistentHashedIndex implements Index {
      *
      * @throws IOException { exception_description }
      */
-    private void readDocInfo() throws IOException {
+    public void readDocInfo() throws IOException {
         File file = new File(INDEXDIR + "/docInfo");
         FileReader freader = new FileReader(file);
         try (BufferedReader br = new BufferedReader(freader)) {
@@ -239,7 +239,7 @@ public class PersistentHashedIndex implements Index {
         int collisions = 0;
         try {
             // Write the 'docNames' and 'docLengths' hash maps to a file
-            writeDocInfo();
+            writeDocInfo(INDEXDIR + "/docInfo");
 
             // Write the dictionary and the postings list
             for (String key : index.keySet()) {
@@ -251,7 +251,7 @@ public class PersistentHashedIndex implements Index {
                 }
                 // Write to dataFile
                 String data = key + " " + index.get(key).toString() + "\n";
-                int size = writeData(data, free);
+                int size = writeData(dataFile, data, free);
 
                 // Write to dictionaryFile
                 Entry entry = new Entry(free, size);

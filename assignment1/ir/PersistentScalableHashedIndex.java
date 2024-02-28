@@ -3,14 +3,13 @@
 *   Information Retrieval course at KTH.
 * 
 *   Johan Boye, KTH, 2018
-*/  
+*/
 
 package ir;
 
 import java.io.*;
 import java.util.*;
 import java.nio.charset.*;
-
 
 /*
 *   Implements an inverted index as a hashtable on disk.
@@ -23,128 +22,80 @@ import java.nio.charset.*;
 *   main-memory HashMap. When all words are read, the index is committed
 *   to disk.
 */
-public class PersistentScalableHashedIndex extends PersistentHashedIndex{
-
+public class PersistentScalableHashedIndex extends PersistentHashedIndex {
 
     /** The dictionary hash table on disk can fit this many entries. */
     public static final long TABLESIZE = 3_500_100L;
+    private static final int TOKEN_LIMIT = 10_000_000;
 
-    // ===================================================================
-    int totalTokens = 0;
-    // Total tokens (guardian): 57_663_287
-    int tokenSeperateCounter = 0;
-    int TOKEN_LIMIT = 10_000_000;
-    // int TOKEN_LIMIT = 1_000_000;
-    int previous_docID = -1;
-
-    int intermediary_number = 0;
-    ArrayList<String> intermediate_dict = new ArrayList<>();
-    ArrayList<String> intermediate_data = new ArrayList<>();
-    ArrayList<String> intermediate_info = new ArrayList<>();
-    HashMap<String, Boolean> merging = new HashMap<>();
-    ArrayList<Thread> threads = new ArrayList<>();
-
-    String foutName;
-
+    private int totalTokens = 0;
+    private int tokenSeperateCounter = 0;
+    private int lastDocId = -1;
+    private int numOfTempFiles = 0;
+    private ArrayList<String> dictFileList = new ArrayList<>();
+    private ArrayList<String> dataFileList = new ArrayList<>();
+    private ArrayList<String> docInfoFileList = new ArrayList<>();
+    private HashMap<String, Boolean> mergingStatusList = new HashMap<>();
+    private ArrayList<Thread> threads = new ArrayList<>();
 
     // ==================================================================
 
-    
     /**
-     *  Constructor. Opens the dictionary file and the data file.
-    *  If these files don't exist, they will be created. 
-    */
+     * Constructor. Opens the dictionary file and the data file.
+     * If these files don't exist, they will be created.
+     */
     public PersistentScalableHashedIndex() {
-        intermediate_dict.add(INDEXDIR + "/" + DICTIONARY_FNAME);
-        intermediate_data.add(INDEXDIR + "/" + DATA_FNAME);
-        foutName = INDEXDIR + "/" + DOCINFO_FNAME;
-        merging.put(intermediate_dict.get(intermediate_dict.size()-1), true);
-        try {
-            dictionaryFile = new RandomAccessFile(intermediate_dict.get(0), "rw" );
-            dataFile = new RandomAccessFile(intermediate_data.get(0), "rw" );
-        } catch ( IOException e ) {
-            e.printStackTrace();
-        }
-
+        createFiles();
         try {
             readDocInfo();
-        } catch ( FileNotFoundException e ) {
-        } catch ( IOException e ) {
+        } catch (FileNotFoundException e) {
+        } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    public void createNewIntermediaryFiles() {
-        ++intermediary_number;
-        intermediate_dict.add(INDEXDIR + "/" + DICTIONARY_FNAME + intermediary_number);
-        intermediate_data.add(INDEXDIR + "/" + DATA_FNAME + intermediary_number);
-        merging.put(intermediate_dict.get(intermediate_dict.size()-1), true);
-        foutName = INDEXDIR + "/" + DOCINFO_FNAME + intermediary_number;
+    public void createFiles() {
+        String dictFilename = INDEXDIR + "/"
+                + (numOfTempFiles == 0 ? DICTIONARY_FNAME : DICTIONARY_FNAME + numOfTempFiles);
+        String dataFilename = INDEXDIR + "/"
+                + (numOfTempFiles == 0 ? DATA_FNAME : DATA_FNAME + numOfTempFiles);
+        String docInfoFileName = INDEXDIR + "/"
+                + (numOfTempFiles == 0 ? DOCINFO_FNAME : DOCINFO_FNAME + numOfTempFiles);
+        dictFileList.add(dictFilename);
+        dataFileList.add(dataFilename);
+        docInfoFileList.add(docInfoFileName);
+        mergingStatusList.put(dictFileList.get(dictFileList.size() - 1), true);
         try {
-            dictionaryFile.close();
-            dataFile.close();
-            dictionaryFile = new RandomAccessFile(intermediate_dict.get(intermediate_dict.size()-1), "rw" );
-            dataFile = new RandomAccessFile(intermediate_data.get(intermediate_data.size()-1), "rw" );
-        } catch ( IOException e ) {
+            if (numOfTempFiles > 0) {
+                dictionaryFile.close();
+                dataFile.close();
+            }
+            // create the directory
+            File indexDir = new File(INDEXDIR);
+            if (!indexDir.exists()) {
+                if (!indexDir.mkdirs()) {
+                    System.err.println("Failed to create index directory.");
+                    return;
+                }
+            }
+            dictionaryFile = new RandomAccessFile(dictFileList.get(dictFileList.size() - 1), "rw");
+            dataFile = new RandomAccessFile(dataFileList.get(dictFileList.size() - 1), "rw");
+        } catch (IOException e) {
             e.printStackTrace();
         }
+        numOfTempFiles++;
     }
 
-
-    // ==================================================================
-
     /**
-     *  Writes the document names and document lengths to file.
-    *
-    * @throws IOException  { exception_description }
-    */
-    private void writeDocInfo() throws IOException {
-        intermediate_info.add(foutName);
-        FileOutputStream fout = new FileOutputStream(intermediate_info.get(intermediate_info.size()-1));
-        for ( Map.Entry<Integer,String> entry : docNames.entrySet() ) {
-            Integer key = entry.getKey();
-            String docInfoEntry = key + ";" + entry.getValue() + ";" + docLengths.get(key) + "\n";
-            fout.write( docInfoEntry.getBytes() );
-        }
-        fout.close();
-    }
-
-
-    /**
-     *  Reads the document names and document lengths from file, and
-    *  put them in the appropriate data structures.
-    *
-    * @throws     IOException  { exception_description }
-    */
-    private void readDocInfo() throws IOException {
-        File file = new File( INDEXDIR + "/docInfo" );
-        FileReader freader = new FileReader(file);
-        try ( BufferedReader br = new BufferedReader(freader) ) {
-            String line;
-            while ((line = br.readLine()) != null) {
-                String[] data = line.split(";");
-                docNames.put( new Integer(data[0]), data[1] );
-                docLengths.put( new Integer(data[0]), new Integer(data[2]) );
-            }
-        }
-        freader.close();
-    }
-
-
-    /**
-     *  Write the index to files.
-    */
+     * Write the index to files.
+     */
     public void writeIndex() {
         int collisions = 0;
         try {
             // Write the 'docNames' and 'docLengths' hash maps to a file
-            writeDocInfo();
+            writeDocInfo(docInfoFileList.get(docInfoFileList.size() - 1));
 
             // Write the dictionary and the postings list
-
-            // 
-            //  YOUR CODE HERE
-            //
 
             // Sort keyset
             List<String> keys = new ArrayList<>(index.keySet());
@@ -154,11 +105,11 @@ public class PersistentScalableHashedIndex extends PersistentHashedIndex{
             for (String key : keys) {
                 ++counter;
                 if (counter % 1000 == 0) {
-                    System.err.print("\r" + String.format("%d%%", (100*counter)/total_keys));
+                    System.err.print("\r" + String.format("%d%%", (100 * counter) / total_keys));
                 }
 
                 // Find empty slot in dictionary
-                long hash = hash(key);
+                long hash = calculateHash(key);
                 while (entryExists(dictionaryFile, hash)) {
                     hash = (hash + 1) % TABLESIZE;
                     ++collisions;
@@ -166,21 +117,21 @@ public class PersistentScalableHashedIndex extends PersistentHashedIndex{
 
                 // Write to dataFile
                 String data = key + " " + index.get(key).toString() + "\n";
-                int size = writeData(data, free);
+                int size = writeData(dataFile, data, free);
 
                 // Write to dictionaryFile
                 Entry entry = new Entry(free, size);
                 writeEntry(entry, hash, dictionaryFile);
-                
+
                 free += size;
             }
             System.err.println("\r100%");
-        } catch ( IOException e ) {
+        } catch (IOException e) {
             e.printStackTrace();
         }
-        System.err.println( collisions + " collisions." );
+        System.err.println(collisions + " collisions.");
 
-        merging.put(intermediate_dict.get(intermediate_dict.size()-1), false);
+        mergingStatusList.put(dictFileList.get(dictFileList.size() - 1), false);
         Merger m = new Merger();
         Thread t = new Thread(m);
         t.start();
@@ -195,26 +146,27 @@ public class PersistentScalableHashedIndex extends PersistentHashedIndex{
         String docInfoFile1;
         String docInfoFile2;
 
-        public Merger() { }
+        public Merger() {
+        }
 
         public void run() {
             findIndexesToMerge();
         }
 
         public void findIndexesToMerge() {
-            for (int i = 0; i < intermediate_dict.size()-1; ++i) {
+            for (int i = 0; i < dictFileList.size() - 1; ++i) {
                 // Only next one is allowed to merge
-                if (!merging.get(intermediate_dict.get(i)) && !merging.get(intermediate_dict.get(i+1))) {
-                    dictionaryFile1 = intermediate_dict.get(i);
-                    dataFile1 = intermediate_data.get(i);
-                    docInfoFile1 = intermediate_info.get(i);
+                if (!mergingStatusList.get(dictFileList.get(i)) && !mergingStatusList.get(dictFileList.get(i + 1))) {
+                    dictionaryFile1 = dictFileList.get(i);
+                    dataFile1 = dataFileList.get(i);
+                    docInfoFile1 = docInfoFileList.get(i);
 
-                    dictionaryFile2 = intermediate_dict.get(i+1);
-                    dataFile2 = intermediate_data.get(i+1);
-                    docInfoFile2 = intermediate_info.get(i+1);
+                    dictionaryFile2 = dictFileList.get(i + 1);
+                    dataFile2 = dataFileList.get(i + 1);
+                    docInfoFile2 = docInfoFileList.get(i + 1);
 
-                    merging.put(dictionaryFile1, true);
-                    merging.put(dictionaryFile2, true);
+                    mergingStatusList.put(dictionaryFile1, true);
+                    mergingStatusList.put(dictionaryFile2, true);
                     mergeIndexes();
                     break;
                 }
@@ -222,10 +174,11 @@ public class PersistentScalableHashedIndex extends PersistentHashedIndex{
         }
 
         public void mergeIndexes() {
-            System.err.println("Merging indexes " + dataFile1 + " and " + dataFile2);
-            
+            System.err.println("mergingStatusList indexes " + dataFile1 + " and " + dataFile2);
+
             // Merge dictionaries and data
-            String merge_dict = INDEXDIR + "/" + "merger_" + dictionaryFile1.split("/")[2] + "_" + dictionaryFile2.split("/")[2];
+            String merge_dict = INDEXDIR + "/" + "merger_" + dictionaryFile1.split("/")[2] + "_"
+                    + dictionaryFile2.split("/")[2];
             String merge_data = INDEXDIR + "/" + "merger_" + dataFile1.split("/")[2] + "_" + dataFile2.split("/")[2];
             try {
                 FileReader fr1 = new FileReader(dataFile1);
@@ -260,16 +213,21 @@ public class PersistentScalableHashedIndex extends PersistentHashedIndex{
                         line2 = br2.readLine();
                     }
                     dataString += "\n";
-                    local_free = writeDataAndEntry(data, dict, dataString, local_free);
+                    local_free = writeTempFiles(data, dict, dataString, local_free);
+
+                    int size = writeData(data, dataString, local_free);
+
+                    local_free += size;
+
                 }
                 // Read remainder
                 while ((line1 = br1.readLine()) != null) {
                     String dataString = line1 + "\n";
-                    local_free = writeDataAndEntry(data, dict, dataString, local_free);
+                    local_free = writeTempFiles(data, dict, dataString, local_free);
                 }
                 while ((line2 = br2.readLine()) != null) {
                     String dataString = line2 + "\n";
-                    local_free = writeDataAndEntry(data, dict, dataString, local_free);
+                    local_free = writeTempFiles(data, dict, dataString, local_free);
                 }
                 fr1.close();
                 fr2.close();
@@ -283,14 +241,14 @@ public class PersistentScalableHashedIndex extends PersistentHashedIndex{
                 deleteFile(dataFile1);
                 deleteFile(dictionaryFile2);
                 deleteFile(dataFile2);
-    
+
                 // Rename merged files to the first file's names
                 renameFile(merge_dict, dictionaryFile1);
                 renameFile(merge_data, dataFile1);
             } catch (IOException e) {
                 e.printStackTrace();
             }
-            
+
             // Merge docInfo files
             try {
                 BufferedReader br = new BufferedReader(new FileReader(docInfoFile2));
@@ -310,15 +268,15 @@ public class PersistentScalableHashedIndex extends PersistentHashedIndex{
             }
 
             // Remove the second file from memory
-            for (int i = 0; i < intermediate_dict.size(); ++i) {
-                if (intermediate_dict.get(i).equals(dictionaryFile2)) {
-                    intermediate_dict.remove(i);
-                    intermediate_data.remove(i);
-                    intermediate_info.remove(i);
+            for (int i = 0; i < dictFileList.size(); ++i) {
+                if (dictFileList.get(i).equals(dictionaryFile2)) {
+                    dictFileList.remove(i);
+                    dataFileList.remove(i);
+                    docInfoFileList.remove(i);
                     break;
                 }
             }
-            merging.put(dictionaryFile1, false);
+            mergingStatusList.put(dictionaryFile1, false);
             System.err.println("Merge complete");
 
             // Repeat and merge again if possible
@@ -357,117 +315,65 @@ public class PersistentScalableHashedIndex extends PersistentHashedIndex{
         }
     }
 
-    public long writeDataAndEntry(
-        RandomAccessFile data, RandomAccessFile dict, String str, long ptr
-    ) {
-        // Write data
-        try {
-            data.seek(ptr);
-            byte[] bytes = str.getBytes();
-            data.write(bytes);
-    
-            // Write entry in dict
-            long hash = hash(str.split(" ")[0]);
-            while (entryExists(dict, hash)) hash = (hash + 1) % TABLESIZE;
-            dict.seek(hash * 12);
-            dict.writeLong(ptr);
-            dict.seek(hash * 12 + 8);
-            dict.writeInt(bytes.length);
-    
-            ptr += bytes.length;
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+    public long writeTempFiles(
+            RandomAccessFile data, RandomAccessFile dict, String str, long ptr) {
+        int size = writeData(data, str, ptr);
+        ptr += size;
+        long hash = calculateHash(str.split(" ")[0]);
+        while (entryExists(dict, hash))
+            hash = (hash + 1) % TABLESIZE;
+        Entry entry = new Entry(ptr, size);
+        writeEntry(entry, ptr, dict);
+
         return ptr;
     }
 
-
     // ==================================================================
 
-
     /**
-     *  Returns the postings for a specific term, or null
-    *  if the term is not in the index.
-    */
-    public PostingsList getPostings( String token ) {
+     * Inserts this token in the main-memory hashtable.
+     */
+    public void insert(String token, int docID, int offset) {
         //
-        //  REPLACE THE STATEMENT BELOW WITH YOUR CODE
+        // YOUR CODE HERE
         //
-        long startTime = System.currentTimeMillis();
-        int collisions = 0;
 
-        long hash = hash(token);
-        while (entryExists(dictionaryFile, hash)) {
-            Entry entry = readEntry(dictionaryFile, hash);
-            String[] data = readData(entry.ptr, entry.size).split(" ");
-            if (data[0].equals(token)) {
-                long startTime2 = System.currentTimeMillis();
-                PostingsList list = new PostingsList(data[1].trim());
-                long elapsedTime = System.currentTimeMillis() - startTime;
-                long elapsedTime2 = System.currentTimeMillis() - startTime2;
-                System.out.println("Found list for '" + token + "': " + elapsedTime + " ms");
-                System.out.println("Collisions: " + collisions);
-                System.out.println("Parsing time: " + elapsedTime2 + " ms");
-                return list;
-            }
-            collisions++;
-            // Try next slot
-            ++hash;
-        }
-        
-        // No match
-        return null;
-    }
-
-
-    /**
-     *  Inserts this token in the main-memory hashtable.
-    */
-    public void insert( String token, int docID, int offset ) {
-        //
-        //  YOUR CODE HERE
-        //
-        
-        ++totalTokens;
-        ++tokenSeperateCounter;
-        if (previous_docID != docID && tokenSeperateCounter > TOKEN_LIMIT) {
-            System.err.println("Writing block and resetting...");
+        totalTokens++;
+        tokenSeperateCounter++;
+        if (tokenSeperateCounter > TOKEN_LIMIT && lastDocId != docID) {
+            System.out.println("Start to Create New Temp Files");
             writeIndex();
-
-            index.clear();
             docNames.clear();
             docLengths.clear();
+            index.clear();
             free = 0;
-            createNewIntermediaryFiles();
-            tokenSeperateCounter = 1;
+            createFiles();
+            tokenSeperateCounter = 0;
         }
 
-        // If first occurrence of this word
-        if (!index.containsKey(token)) index.put(token, new PostingsList());
-
-        // Assume in-order insertions, current doc is last doc if previously seen
-        // Doc not previously inserted
-        if (index.get(token).size() == 0 || index.get(token).get(index.get(token).size()-1).docID != docID) index.get(token).insertEntry(new PostingsEntry(docID));
-        // Add position of token
-        index.get(token).get(index.get(token).size()-1).addPosition(offset);
-
-        previous_docID = docID;
-    }
-
-    public long hash(String token) {
-        long hash = 0;
-        for (char c : token.toCharArray()) {
-            hash = (hash*50 + c) % TABLESIZE;
+        // Create a new PostingsEntry
+        PostingsEntry entry = new PostingsEntry(docID, offset);
+        // Check if the token already exists in the index
+        if (index.containsKey(token)) {
+            // If the token exists, get its postings list and add the new entry
+            PostingsList postingsList = index.get(token);
+            postingsList.insert(entry);
+        } else {
+            // If the token doesn't exist, create a new postings list and add the entry
+            PostingsList postingsList = new PostingsList();
+            postingsList.insert(entry);
+            index.put(token, postingsList);
         }
-        return hash;
-    }
 
+        lastDocId = docID;
+    }
 
     /**
-     *  Write index to file after indexing is done.
-    */
+     * Write index to file after indexing is done.
+     */
     public void cleanup() {
-        System.err.println("Indexing finished");
+        System.err.println(index.keySet().size() + " unique words at the present stage.");
+        System.err.println(totalTokens + " unique words totally.");
         writeIndex();
         try {
             dictionaryFile.close();
@@ -475,31 +381,28 @@ public class PersistentScalableHashedIndex extends PersistentHashedIndex{
         } catch (IOException e) {
             e.printStackTrace();
         }
-        System.err.println(index.keySet().size() + " unique words" );
-        System.err.println(totalTokens + " total tokens");
-        System.err.println("Waiting for all merger-threads to finish...");
-        for (Thread t : threads) {
+        threads.forEach(t -> {
             try {
                 t.join();
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
-        }
+        });  
 
         try {
-            dictionaryFile = new RandomAccessFile(intermediate_dict.get(0), "rw" );
-            dataFile = new RandomAccessFile(intermediate_data.get(0), "rw" );
-        } catch ( IOException e ) {
+            dictionaryFile = new RandomAccessFile(dictFileList.get(0), "rw");
+            dataFile = new RandomAccessFile(dataFileList.get(0), "rw");
+        } catch (IOException e) {
             e.printStackTrace();
         }
 
         try {
             readDocInfo();
-        } catch ( FileNotFoundException e ) {
-        } catch ( IOException e ) {
+        } catch (FileNotFoundException e) {
+        } catch (IOException e) {
             e.printStackTrace();
         }
 
-        System.err.println( "done!" );
+        System.err.println("done!");
     }
 }
