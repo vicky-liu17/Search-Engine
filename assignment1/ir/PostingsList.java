@@ -66,6 +66,10 @@ public class PostingsList implements Iterable<PostingsEntry> {
         }
     }
 
+    public void insertEntry(PostingsEntry entry){
+        list.add(entry);
+    }
+
     public String toString() {
         return list.stream()
                 .map(PostingsEntry::toString)

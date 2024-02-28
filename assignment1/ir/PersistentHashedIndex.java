@@ -145,17 +145,17 @@ public class PersistentHashedIndex implements Index {
      * 
      * @param ptr The place in the dictionary file to store the entry
      */
-    void writeEntry(Entry entry, long ptr) {
+    void writeEntry(Entry entry, long ptr, RandomAccessFile dictFile) {
         try {
 
             // In this implementation, each entry consists of a long (8 bytes) for the
             // pointer and an int (4 bytes) for the size, totaling 12 bytes.
             ptr *= 12;
-            dictionaryFile.seek(ptr);
-            dictionaryFile.writeLong(entry.ptr);
+            dictFile.seek(ptr);
+            dictFile.writeLong(entry.ptr);
             // Move the file pointer to 8 bytes ahead to get the entry.size(long (8 bytes))
-            dictionaryFile.seek(ptr + 8);
-            dictionaryFile.writeInt(entry.size);
+            dictFile.seek(ptr + 8);
+            dictFile.writeInt(entry.size);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -166,7 +166,7 @@ public class PersistentHashedIndex implements Index {
      *
      * @param ptr The place in the dictionary file where to start reading.
      */
-    Entry readEntry(long ptr) {
+    Entry readEntry(RandomAccessFile dictFile, long ptr) {
         try {
             // Multiplying the hash value by the entry size provides an offset that
             // accurately positions the read operation at the beginning of the data
@@ -175,10 +175,10 @@ public class PersistentHashedIndex implements Index {
             // that each slot in the hash table may contain multiple entries, and each entry
             // has a specific size.
             ptr *= 12;
-            dictionaryFile.seek(ptr);
-            long entry_ptr = dictionaryFile.readLong();
-            dictionaryFile.seek(ptr + 8);
-            int entry_size = dictionaryFile.readInt();
+            dictFile.seek(ptr);
+            long entry_ptr = dictFile.readLong();
+            dictFile.seek(ptr + 8);
+            int entry_size = dictFile.readInt();
             Entry entry = new Entry(entry_ptr, entry_size);
             return entry;
         } catch (IOException e) {
@@ -245,7 +245,7 @@ public class PersistentHashedIndex implements Index {
             for (String key : index.keySet()) {
                 // Find empty slot in dictionary
                 long hashValue = calculateHash(key);
-                while (entryExists(hashValue)) {
+                while (entryExists(dictionaryFile, hashValue)) {
                     hashValue = (hashValue + 1) % TABLESIZE;
                     collisions++;
                 }
@@ -255,7 +255,7 @@ public class PersistentHashedIndex implements Index {
 
                 // Write to dictionaryFile
                 Entry entry = new Entry(free, size);
-                writeEntry(entry, hashValue);
+                writeEntry(entry, hashValue, dictionaryFile);
 
                 free += size;
             }
@@ -274,12 +274,15 @@ public class PersistentHashedIndex implements Index {
     public PostingsList getPostings(String token) {
         // Calculate the hash value of the token
         long hashValue = calculateHash(token);
+        Instant startTime = Instant.now();
+        int collisions = 0;
+        System.out.println(token);
 
         // Iterate through the hash table until an entry with the given token is found
         // or the end is reached
-        while (entryExists(hashValue)) {
+        while (entryExists(dictionaryFile, hashValue)) {
             // Read the entry at the calculated hash position
-            Entry entry = readEntry(hashValue);
+            Entry entry = readEntry(dictionaryFile, hashValue);
 
             // Read the data associated with the entry
             String[] data = readData(entry.ptr, entry.size).split(" ");
@@ -288,12 +291,17 @@ public class PersistentHashedIndex implements Index {
 
             // Check if the first element of the data array matches the token
             if (data[0].equals(token)) {
+                Instant endTime = Instant.now();
+                Duration elapsedTime = Duration.between(startTime, endTime);
                 // If a match is found, return the associated postings list
+                System.out.println("Collisions: " + collisions);
+                System.out.println("Searching time for token " + token + ": " + elapsedTime.toMillis() + " ms");
                 return new PostingsList(data[1].trim());
             }
 
             // If no match is found, move to the next slot in the hash table
             hashValue++;
+            collisions++;
         }
 
         // If the loop completes without finding a match, return null
@@ -349,8 +357,8 @@ public class PersistentHashedIndex implements Index {
      * @param hashValue The hash value used to locate the entry.
      * @return True if an entry exists, false otherwise.
      */
-    public boolean entryExists(long hashValue) {
-        Entry entry = readEntry(hashValue);
+    public boolean entryExists(RandomAccessFile dictFile, long hashValue) {
+        Entry entry = readEntry(dictFile, hashValue);
         return entry != null && entry.ptr != 0 && entry.size != 0;
     }
 
