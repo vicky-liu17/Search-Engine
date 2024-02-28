@@ -235,19 +235,27 @@ public class PersistentHashedIndex implements Index {
     /**
      * Write the index to files.
      */
-    public void writeIndex() {
+    public void writeIndex(String fileName) {
         int collisions = 0;
         try {
             // Write the 'docNames' and 'docLengths' hash maps to a file
-            writeDocInfo(INDEXDIR + "/docInfo");
+            writeDocInfo(fileName);
 
             // Write the dictionary and the postings list
-            for (String key : index.keySet()) {
+            List<String> keys = new ArrayList<>(index.keySet());
+            Collections.sort(keys);
+            int totalKeys = keys.size();
+            int counter = 0;
+            System.out.println("Write index to dataFile and dictionary...");
+            for (String key : keys) {
                 // Find empty slot in dictionary
                 long hashValue = calculateHash(key);
                 while (entryExists(dictionaryFile, hashValue)) {
                     hashValue = (hashValue + 1) % TABLESIZE;
                     collisions++;
+                }
+                if (counter % 1000 == 0) {
+                    System.err.print("\r" + progressBar(counter, totalKeys));
                 }
                 // Write to dataFile
                 String data = key + " " + index.get(key).toString() + "\n";
@@ -258,11 +266,30 @@ public class PersistentHashedIndex implements Index {
                 writeEntry(entry, hashValue, dictionaryFile);
 
                 free += size;
+                counter++;
             }
+            System.err.println("\r" + progressBar(totalKeys, totalKeys));
         } catch (IOException e) {
             e.printStackTrace();
         }
         System.err.println(collisions + " collisions.");
+    }
+
+    // Function to create progress bar
+    public String progressBar(int current, int total) {
+        int length = 50; // Adjust length of progress bar
+        int progress = (int) (((double) current / total) * length);
+        StringBuilder progressBar = new StringBuilder();
+        progressBar.append("[");
+        for (int i = 0; i < progress; i++) {
+            progressBar.append("=");
+        }
+        progressBar.append(">");
+        for (int i = progress; i < length; i++) {
+            progressBar.append(" ");
+        }
+        progressBar.append("] ");
+        return progressBar.toString();
     }
 
     // ==================================================================
@@ -276,7 +303,6 @@ public class PersistentHashedIndex implements Index {
         long hashValue = calculateHash(token);
         Instant startTime = Instant.now();
         int collisions = 0;
-        System.out.println(token);
 
         // Iterate through the hash table until an entry with the given token is found
         // or the end is reached
@@ -286,8 +312,6 @@ public class PersistentHashedIndex implements Index {
 
             // Read the data associated with the entry
             String[] data = readData(entry.ptr, entry.size).split(" ");
-            System.out.println(data[0]);
-            System.out.println(data[1]);
 
             // Check if the first element of the data array matches the token
             if (data[0].equals(token)) {
@@ -295,7 +319,7 @@ public class PersistentHashedIndex implements Index {
                 Duration elapsedTime = Duration.between(startTime, endTime);
                 // If a match is found, return the associated postings list
                 System.out.println("Collisions: " + collisions);
-                System.out.println("Searching time for token " + token + ": " + elapsedTime.toMillis() + " ms");
+                System.out.println("Searching time for token '" + token + "'': " + elapsedTime.toMillis() + " ms");
                 return new PostingsList(data[1].trim());
             }
 
@@ -368,10 +392,10 @@ public class PersistentHashedIndex implements Index {
 
     public void cleanup() {
         System.err.println(index.keySet().size() + " unique words");
-        System.err.print("Writing index to disk...");
+        System.err.println("Writing index to disk...");
 
         Instant startTime = Instant.now();
-        writeIndex();
+        writeIndex(INDEXDIR + "/docInfo");
         Instant endTime = Instant.now();
 
         System.err.println("done!");
