@@ -92,31 +92,6 @@ public class PersistentScalableHashedIndex extends PersistentHashedIndex{
 
 
     // ==================================================================
-    //
-    //  Reading and writing to the dictionary file.
-
-    Entry readEntry(RandomAccessFile dictFile, long ptr) {
-        try {
-            // Multiplying the hash value by the entry size provides an offset that
-            // accurately positions the read operation at the beginning of the data
-            // associated with the hash value within the storage structure. This ensures
-            // that the read operation retrieves the correct data, accounting for the fact
-            // that each slot in the hash table may contain multiple entries, and each entry
-            // has a specific size.
-            ptr *= 12;
-            dictFile.seek(ptr);
-            long entry_ptr = dictFile.readLong();
-            dictFile.seek(ptr + 8);
-            int entry_size = dictFile.readInt();
-            Entry entry = new Entry(entry_ptr, entry_size);
-            return entry;
-        } catch (IOException e) {
-        }
-        return null;
-    }
-
-
-    // ==================================================================
 
     /**
      *  Writes the document names and document lengths to file.
