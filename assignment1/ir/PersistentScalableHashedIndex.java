@@ -86,246 +86,25 @@ public class PersistentScalableHashedIndex extends PersistentHashedIndex {
         numOfTempFiles++;
     }
 
-    /**
-     * Write the index to files.
-     */
-    public void writeIndex() {
-        int collisions = 0;
-        try {
-            // Write the 'docNames' and 'docLengths' hash maps to a file
-            writeDocInfo(docInfoFileList.get(docInfoFileList.size() - 1));
-
-            // Write the dictionary and the postings list
-
-            // Sort keyset
-            List<String> keys = new ArrayList<>(index.keySet());
-            Collections.sort(keys);
-            int total_keys = keys.size();
-            int counter = 0;
-            for (String key : keys) {
-                ++counter;
-                if (counter % 1000 == 0) {
-                    System.err.print("\r" + String.format("%d%%", (100 * counter) / total_keys));
-                }
-
-                // Find empty slot in dictionary
-                long hash = calculateHash(key);
-                while (entryExists(dictionaryFile, hash)) {
-                    hash = (hash + 1) % TABLESIZE;
-                    ++collisions;
-                }
-
-                // Write to dataFile
-                String data = key + " " + index.get(key).toString() + "\n";
-                int size = writeData(dataFile, data, free);
-
-                // Write to dictionaryFile
-                Entry entry = new Entry(free, size);
-                writeEntry(entry, hash, dictionaryFile);
-
-                free += size;
-            }
-            System.err.println("\r100%");
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        System.err.println(collisions + " collisions.");
-
+    public void startMerging() {
         mergingStatusList.put(dictFileList.get(dictFileList.size() - 1), false);
-        Merger m = new Merger();
+        FileMerger m = new FileMerger();
         Thread t = new Thread(m);
         t.start();
         threads.add(t);
     }
 
-    class Merger implements Runnable {
-        String dictionaryFile1;
-        String dictionaryFile2;
-        String dataFile1;
-        String dataFile2;
-        String docInfoFile1;
-        String docInfoFile2;
-
-        public Merger() {
-        }
-
-        public void run() {
-            findIndexesToMerge();
-        }
-
-        public void findIndexesToMerge() {
-            for (int i = 0; i < dictFileList.size() - 1; ++i) {
-                // Only next one is allowed to merge
-                if (!mergingStatusList.get(dictFileList.get(i)) && !mergingStatusList.get(dictFileList.get(i + 1))) {
-                    dictionaryFile1 = dictFileList.get(i);
-                    dataFile1 = dataFileList.get(i);
-                    docInfoFile1 = docInfoFileList.get(i);
-
-                    dictionaryFile2 = dictFileList.get(i + 1);
-                    dataFile2 = dataFileList.get(i + 1);
-                    docInfoFile2 = docInfoFileList.get(i + 1);
-
-                    mergingStatusList.put(dictionaryFile1, true);
-                    mergingStatusList.put(dictionaryFile2, true);
-                    mergeIndexes();
-                    break;
-                }
-            }
-        }
-
-        public void mergeIndexes() {
-            System.err.println("mergingStatusList indexes " + dataFile1 + " and " + dataFile2);
-
-            // Merge dictionaries and data
-            String merge_dict = INDEXDIR + "/" + "merger_" + dictionaryFile1.split("/")[2] + "_"
-                    + dictionaryFile2.split("/")[2];
-            String merge_data = INDEXDIR + "/" + "merger_" + dataFile1.split("/")[2] + "_" + dataFile2.split("/")[2];
-            try {
-                FileReader fr1 = new FileReader(dataFile1);
-                FileReader fr2 = new FileReader(dataFile2);
-                BufferedReader br1 = new BufferedReader(fr1);
-                BufferedReader br2 = new BufferedReader(fr2);
-                RandomAccessFile dict = new RandomAccessFile(merge_dict, "rw");
-                RandomAccessFile data = new RandomAccessFile(merge_data, "rw");
-                long local_free = 0;
-
-                String line1 = br1.readLine();
-                String line2 = br2.readLine();
-                while (line1 != null && line2 != null) {
-                    String[] arr1 = line1.split(" ");
-                    String[] arr2 = line2.split(" ");
-                    String term1 = arr1[0];
-                    String term2 = arr2[0];
-
-                    String dataString = "";
-                    if (term1.compareTo(term2) == 0) {
-                        // Terms are the same, merge
-                        dataString = line1 + "," + arr2[1];
-                        line1 = br1.readLine();
-                        line2 = br2.readLine();
-                    } else if (term1.compareTo(term2) < 0) {
-                        // term1 comes before term2
-                        dataString = line1;
-                        line1 = br1.readLine();
-                    } else if (term1.compareTo(term2) > 0) {
-                        // term2 comes before term1
-                        dataString = line2;
-                        line2 = br2.readLine();
-                    }
-                    dataString += "\n";
-                    local_free = writeTempFiles(data, dict, dataString, local_free);
-
-                    int size = writeData(data, dataString, local_free);
-
-                    local_free += size;
-
-                }
-                // Read remainder
-                while ((line1 = br1.readLine()) != null) {
-                    String dataString = line1 + "\n";
-                    local_free = writeTempFiles(data, dict, dataString, local_free);
-                }
-                while ((line2 = br2.readLine()) != null) {
-                    String dataString = line2 + "\n";
-                    local_free = writeTempFiles(data, dict, dataString, local_free);
-                }
-                fr1.close();
-                fr2.close();
-                br1.close();
-                br2.close();
-                dict.close();
-                data.close();
-
-                // Remove both indexes' files from disk
-                deleteFile(dictionaryFile1);
-                deleteFile(dataFile1);
-                deleteFile(dictionaryFile2);
-                deleteFile(dataFile2);
-
-                // Rename merged files to the first file's names
-                renameFile(merge_dict, dictionaryFile1);
-                renameFile(merge_data, dataFile1);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-
-            // Merge docInfo files
-            try {
-                BufferedReader br = new BufferedReader(new FileReader(docInfoFile2));
-                BufferedWriter bw = new BufferedWriter(new FileWriter(docInfoFile1, true));
-                String line;
-                while ((line = br.readLine()) != null) {
-                    bw.write(line);
-                    bw.newLine();
-                }
-                br.close();
-                bw.close();
-
-                // Remove second docInfo file
-                deleteFile(docInfoFile2);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-
-            // Remove the second file from memory
-            for (int i = 0; i < dictFileList.size(); ++i) {
-                if (dictFileList.get(i).equals(dictionaryFile2)) {
-                    dictFileList.remove(i);
-                    dataFileList.remove(i);
-                    docInfoFileList.remove(i);
-                    break;
-                }
-            }
-            mergingStatusList.put(dictionaryFile1, false);
-            System.err.println("Merge complete");
-
-            // Repeat and merge again if possible
-            findIndexesToMerge();
-        }
-
-        public void deleteFile(String filePath) {
-            File f = new File(filePath);
-            String name = f.getName();
-            while (!f.delete()) {
-                System.err.println("Failed to delete " + name + ", Trying again...");
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-            System.err.println("Deleted " + name);
-        }
-
-        public void renameFile(String filePath1, String filePath2) {
-            File file1 = new File(filePath1);
-            File file2 = new File(filePath2);
-            String name1 = file1.getName();
-            String name2 = file2.getName();
-            while (!file1.renameTo(file2)) {
-                System.out.println("Failed to rename " + name1 + " to " + name2 + ", Trying again...");
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-            System.out.println("Renamed " + name1 + " to " + name2);
-
-        }
-    }
-
     public long writeTempFiles(
-            RandomAccessFile data, RandomAccessFile dict, String str, long ptr) {
-        int size = writeData(data, str, ptr);
-        ptr += size;
-        long hash = calculateHash(str.split(" ")[0]);
-        while (entryExists(dict, hash))
-            hash = (hash + 1) % TABLESIZE;
-        Entry entry = new Entry(ptr, size);
-        writeEntry(entry, ptr, dict);
+            RandomAccessFile dataFile, RandomAccessFile dictionaryFile, String text, long position) {
+        int dataSize = writeData(dataFile, text, position);
+        position += dataSize;
+        long hashCode = calculateHash(text.split(" ")[0]);
+        while (entryExists(dictionaryFile, hashCode))
+            hashCode = (hashCode + 1) % TABLESIZE;
+        Entry newEntry = new Entry(position, dataSize);
+        writeEntry(newEntry, position, dictionaryFile);
 
-        return ptr;
+        return position;
     }
 
     // ==================================================================
@@ -342,7 +121,8 @@ public class PersistentScalableHashedIndex extends PersistentHashedIndex {
         tokenSeperateCounter++;
         if (tokenSeperateCounter > TOKEN_LIMIT && lastDocId != docID) {
             System.out.println("Start to Create New Temp Files");
-            writeIndex();
+            writeIndex(docInfoFileList.get(docInfoFileList.size() - 1));
+            startMerging();
             docNames.clear();
             docLengths.clear();
             index.clear();
@@ -374,7 +154,9 @@ public class PersistentScalableHashedIndex extends PersistentHashedIndex {
     public void cleanup() {
         System.err.println(index.keySet().size() + " unique words at the present stage.");
         System.err.println(totalTokens + " unique words totally.");
-        writeIndex();
+        System.err.println("Writing index to disk...");
+        writeIndex(docInfoFileList.get(docInfoFileList.size() - 1));
+        startMerging();
         try {
             dictionaryFile.close();
             dataFile.close();
@@ -387,7 +169,7 @@ public class PersistentScalableHashedIndex extends PersistentHashedIndex {
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
-        });  
+        });
 
         try {
             dictionaryFile = new RandomAccessFile(dictFileList.get(0), "rw");
@@ -404,5 +186,181 @@ public class PersistentScalableHashedIndex extends PersistentHashedIndex {
         }
 
         System.err.println("done!");
+    }
+
+    class FileMerger implements Runnable {
+        String dictFile_1;
+        String dictFile_2;
+        String dataFile_1;
+        String dataFile_2;
+        String docInfoFile_1;
+        String docInfoFile_2;
+
+        public FileMerger() {
+        }
+
+        public void run() {
+            startMergingFile();
+        }
+
+        public void startMergingFile() {
+            int i = 0;
+            while (i < dictFileList.size() - 1) {
+                String dictFile1 = dictFileList.get(i);
+                String dictFile2 = dictFileList.get(i + 1);
+
+                if (!mergingStatusList.get(dictFile1) && !mergingStatusList.get(dictFile2)) {
+                    mergingStatusList.put(dictFile1, true);
+                    mergingStatusList.put(dictFile2, true);
+
+                    dictFile_1 = dictFile1;
+                    dataFile_1 = dataFileList.get(i);
+                    docInfoFile_1 = docInfoFileList.get(i);
+
+                    dictFile_2 = dictFile2;
+                    dataFile_2 = dataFileList.get(i + 1);
+                    docInfoFile_2 = docInfoFileList.get(i + 1);
+
+                    mergeTwoIndexes();
+                    break;
+                }
+                i++;
+            }
+        }
+
+        public void mergeTwoIndexes() {
+            System.out.println(dataFile_1 + " and " + dataFile_2 + " is in the merging process.");
+
+            String mergeDictFileName = INDEXDIR + "/" + "merging_" + dictFile_1.split("/")[2] + "_"
+                    + dictFile_2.split("/")[2];
+            String mergeDataFileName = INDEXDIR + "/" + "merging_" + dataFile_1.split("/")[2] + "_"
+                    + dataFile_2.split("/")[2];
+
+            // Merge data and dictionary
+            try (BufferedReader bufferedReader_1 = new BufferedReader(new FileReader(dataFile_1));
+                    BufferedReader bufferedReader_2 = new BufferedReader(new FileReader(dataFile_2));
+                    RandomAccessFile dict = new RandomAccessFile(mergeDictFileName, "rw");
+                    RandomAccessFile data = new RandomAccessFile(mergeDataFileName, "rw")) {
+
+                long tempFilePointer = 0;
+                String line1 = bufferedReader_1.readLine();
+                String line2 = bufferedReader_2.readLine();
+
+                while (line1 != null && line2 != null) {
+                    String dataString;
+                    String[] arr1 = line1.split(" ");
+                    String[] arr2 = line2.split(" ");
+                    String term1 = arr1[0];
+                    String term2 = arr2[0];
+
+                    if (term1.compareTo(term2) <= 0) {
+                        dataString = term1.compareTo(term2) == 0 ? line1 + "," + arr2[1] : line1;
+                        line1 = bufferedReader_1.readLine();
+                    } else {
+                        dataString = line2;
+                        line2 = bufferedReader_2.readLine();
+                    }
+                    dataString += "\n";
+                    tempFilePointer = writeTempFiles(data, dict, dataString, tempFilePointer);
+                }
+
+                String line;
+                BufferedReader bufferedReader = line1 != null ? bufferedReader_1 : bufferedReader_2;
+                while ((line = bufferedReader.readLine()) != null) {
+                    String dataString = line + "\n";
+                    tempFilePointer = writeTempFiles(data, dict, dataString, tempFilePointer);
+                }
+
+                bufferedReader_1.close();
+                bufferedReader_2.close();
+                bufferedReader.close();
+                dict.close();
+                data.close();
+
+                deleteFile(dictFile_1);
+                deleteFile(dataFile_1);
+                deleteFile(dictFile_2);
+                deleteFile(dataFile_2);
+
+                renameFile(mergeDictFileName, dictFile_1);
+                renameFile(mergeDataFileName, dataFile_1);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            // Merge docInfo files
+            // The 'true' parameter in FileWriter(docInfoFile_1, true) indicates that the
+            // FileWriter
+            // should append the new content to the end of the existing content in the file,
+            // rather than overwriting the existing content.
+
+            try (
+                    BufferedReader br = new BufferedReader(new FileReader(docInfoFile_2));
+                    BufferedWriter bw = new BufferedWriter(new FileWriter(docInfoFile_1, true))) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    bw.write(line);
+                    bw.newLine();
+                }
+                // Remove second file
+                deleteFile(docInfoFile_2);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            // Remove the second file from memory
+            int indexToRemove = dictFileList.indexOf(dictFile_2);
+            if (indexToRemove != -1) {
+                dictFileList.remove(indexToRemove);
+                dataFileList.remove(indexToRemove);
+                docInfoFileList.remove(indexToRemove);
+            }
+
+            mergingStatusList.put(dictFile_1, false);
+            System.err.println("Finished!");
+
+            // Repeat and merge again if possible
+            startMergingFile();
+        }
+
+        public void deleteFile(String filePath) {
+            File fileToDelete = new File(filePath);
+            String name = fileToDelete.getName();
+
+            if (fileToDelete.exists()) {
+                if (fileToDelete.delete()) {
+                    System.err.println(name + " is deleted successfully");
+                } else {
+                    System.err.println("Failed to delete " + name);
+                }
+            } else {
+                System.err.println(name + " does not exist");
+            }
+        }
+
+        public void renameFile(String filePath1, String filePath2) {
+            File sourceFile = new File(filePath1);
+            File destFile = new File(filePath2);
+            String sourceName = sourceFile.getName();
+            String destName = destFile.getName();
+
+            if (sourceFile.renameTo(destFile)) {
+                System.out.println("Successfully Renamed " + sourceName + " to " + destName);
+            } else {
+                System.out.println("Failed to rename " + sourceName);
+                // Retry renaming after waiting for a short period
+                try {
+                    Thread.sleep(1000);
+                    if (sourceFile.renameTo(destFile)) {
+                        System.out.println("Successfully Renamed " + sourceName + " to " + destName);
+                    } else {
+                        System.out.println("Failed to rename " + sourceName + " even after retrying");
+                    }
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+
     }
 }

@@ -101,11 +101,12 @@ $$Recall = \frac{4}{100} = 0.04$$
 1 Linda_Katehi.f 0
 1 Wildlife%2C_Fish%2C_and_Conservation_Biology.f 0
 1 Mathematics.f 3
+1 PatrickDragon.f 1
 ```
 
-$$Precision = \frac{4}{11} \approx 0.36$$
+$$Precision = \frac{5}{12} \approx 0.41$$
 
-$$Recall = \frac{4}{100} = 0.04$$
+$$Recall = \frac{5}{100} = 0.05$$
 
 - Query: "mathematics graduate degree"
 
@@ -121,10 +122,11 @@ $$Recall = \frac{4}{100} = 0.04$$
 1 Statistics.f 2
 1 Wildlife%2C_Fish%2C_and_Conservation_Biology.f 0
 1 Mathematics.f 3
+1 PatrickDragon.f 1
 ```
-$$Precision = \frac{4}{11} \approx 0.36$$
+$$Precision = \frac{5}{12} \approx 0.41$$
 
-$$Recall = \frac{4}{100} = 0.04$$
+$$Recall = \frac{5}{100} = 0.05$$
 
 - Query: graduate program mathematics degree UC davis
 
@@ -148,7 +150,7 @@ $$Precision = \frac{Relevant—retrieved-instances}{All-retrieved-instances} = \
 
 $$Recall = \frac{Relevant-retrieved-instances}{All-relevant-instances} = \frac{7}{100} = 0.07$$
 
-- Query: "mathematics program graduate UC""
+- Query: "Info about the education in Mathematics on a graduate level at UC Davis""
 
 $$Precision = \frac{0}{1} \approx 0$$
 
