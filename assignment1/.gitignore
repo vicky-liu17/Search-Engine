@@ -1,0 +1,19 @@
+# 忽略指定的文件夹
+index/
+index2/
+davisWiki/
+classes/
+guardian/
+
+# 额外忽略所有 .DS_Store（适用于 macOS）
+.DS_Store
+
+# 额外忽略所有编译生成的文件
+*.o
+*.log
+*.tmp
+*.swp
+
+# 额外忽略 IDE 相关的配置文件（适用于 VSCode、JetBrains 系列等）
+.vscode/
+.idea/

@@ -10,6 +10,8 @@ package ir;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import ir.PersistentHashedIndex.Entry;
+
 public class PostingsList implements Iterable<PostingsEntry> {
     /**
      * The postings list
@@ -65,6 +67,10 @@ public class PostingsList implements Iterable<PostingsEntry> {
             list.add(index, entry); // Insert entry at calculated index
         }
     }
+    public void insertEntry(PostingsEntry entry){
+        list.add(entry);
+    }
+    
 
     public String toString() {
         return list.stream()
