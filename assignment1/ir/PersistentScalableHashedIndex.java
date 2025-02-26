@@ -63,9 +63,6 @@ public class PersistentScalableHashedIndex implements Index {
      *   A helper class representing one entry in the dictionary hashtable.
     */ 
     public class Entry {
-        //
-        //  YOUR CODE HERE
-        //
         long ptr;
         int size; 
 
@@ -181,16 +178,12 @@ public class PersistentScalableHashedIndex implements Index {
     *  @param ptr   The place in the dictionary file to store the entry
     */
     void writeEntry( Entry entry, long ptr ) {
-        //
-        //  YOUR CODE HERE
-        //
         try {
             dictionaryFile.seek(ptr);
             dictionaryFile.writeLong(entry.ptr);
             dictionaryFile.seek(ptr + 8);
             dictionaryFile.writeInt(entry.size);
         } catch (IOException e) {
-            // TODO Auto-generated catch block
             e.printStackTrace();
         }
     }
@@ -201,9 +194,6 @@ public class PersistentScalableHashedIndex implements Index {
     *  @param ptr The place in the dictionary file where to start reading.
     */
     Entry readEntry( RandomAccessFile dict, long ptr ) {   
-        //
-        //  REPLACE THE STATEMENT BELOW WITH YOUR CODE 
-        //
         try {
             dict.seek(ptr);
             long entry_ptr = dict.readLong();
@@ -270,10 +260,6 @@ public class PersistentScalableHashedIndex implements Index {
             writeDocInfo();
 
             // Write the dictionary and the postings list
-
-            // 
-            //  YOUR CODE HERE
-            //
 
             // Sort keyset
             List<String> keys = new ArrayList<>(index.keySet());
@@ -417,7 +403,6 @@ public class PersistentScalableHashedIndex implements Index {
                 renameFile(merge_dict, dictionaryFile1);
                 renameFile(merge_data, dataFile1);
             } catch (IOException e) {
-                // TODO Auto-generated catch block
                 e.printStackTrace();
             }
             
@@ -436,7 +421,6 @@ public class PersistentScalableHashedIndex implements Index {
                 // Remove second docInfo file
                 deleteFile(docInfoFile2);
             } catch (IOException e) {
-                // TODO Auto-generated catch block
                 e.printStackTrace();
             }
 
@@ -464,7 +448,6 @@ public class PersistentScalableHashedIndex implements Index {
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException e) {
-                    // TODO Auto-generated catch block
                     e.printStackTrace();
                 }
             }
@@ -481,7 +464,6 @@ public class PersistentScalableHashedIndex implements Index {
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException e) {
-                    // TODO Auto-generated catch block
                     e.printStackTrace();
                 }
             }
