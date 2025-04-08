@@ -32,6 +32,10 @@ public class PostingsList implements Iterable<PostingsEntry> {
         return list.get(i);
     }
 
+    public ArrayList<PostingsEntry> getList() {
+        return list;
+    }
+
     /**
      * If the entry with the same docID is found in the list, it merges their
      * positions.
@@ -85,6 +89,11 @@ public class PostingsList implements Iterable<PostingsEntry> {
     }
 
     public PostingsList() {
+    }
+
+    public void sortByScore()
+    {
+        list.sort(Comparator.comparing(PostingsEntry::getScore, Comparator.reverseOrder()));
     }
 
     @Override

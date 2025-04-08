@@ -46,6 +46,10 @@ public class PostingsEntry implements Comparable<PostingsEntry>, Serializable {
         positions.add(position);
     }
 
+    public void setScore(double score) {
+        this.score = score;
+    }
+
     public void setPositions(ArrayList<Integer> positions) {
         this.positions = positions;
     }

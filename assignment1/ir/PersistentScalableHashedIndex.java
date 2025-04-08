@@ -76,7 +76,7 @@ public class PersistentScalableHashedIndex implements Index {
     int total_tokens = 0;
     // Total tokens (guardian): 57_663_287
     int token_count = 0;
-    int TOKEN_LIMIT = 10_000_000;
+    int TOKEN_LIMIT = 10000;
     // int TOKEN_LIMIT = 1_000_000;
     int previous_docID = -1;
 

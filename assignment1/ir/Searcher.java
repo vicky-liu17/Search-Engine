@@ -28,22 +28,124 @@ public class Searcher {
      * @return A postings list representing the result of the query.
      */
     public PostingsList search(Query query, QueryType queryType, RankingType rankingType, NormalizationType normType) {
+    List<PostingsList> postings = getPostingsLists(query);
 
-        List<PostingsList> postings = getPostingsLists(query);
-
-        if (postings == null || postings.isEmpty()) {
-            return new PostingsList();
-        }
-
-        PostingsList result = null;
-
-        if (queryType == QueryType.INTERSECTION_QUERY) {
-            result = query(postings, true);
-        } else if (queryType == QueryType.PHRASE_QUERY) {
-            result = query(postings, false);
-        }
-        return result;
+    if (postings == null || postings.isEmpty()) {
+        return new PostingsList();
     }
+
+    PostingsList result = null;
+
+    if (queryType == QueryType.INTERSECTION_QUERY) {
+        result = query(postings, true);
+    } else if (queryType == QueryType.PHRASE_QUERY) {
+        result = query(postings, false);
+    } else if (queryType == QueryType.RANKED_QUERY) {
+        result = rankedRetrieval(query.queryterm);
+    }
+
+    return result;
+}
+
+ /* --------------------------------------------- */
+
+    // 2.2 and 2.1 and 2.5.2 tf_idf (everything between the lines)
+    // changed for 3.1
+
+    private PostingsList rankedRetrieval(List<Query.QueryTerm> queryTerms) {
+
+        // Get all the searched terms
+        List<String> terms = queryTerms.stream().map(queryTerm -> queryTerm.term).toList();
+
+        // map: <doc, score>
+        // Create empty dictionary to hold document scores
+        Map<PostingsEntry, Double> docScores = new HashMap<>();
+
+        // Loop through all search query terms, for each term,
+        // changed the following 2 lines for 3.1
+        // used to be:
+        // for ( term : terms ) {
+        for (Query.QueryTerm queryTerm : queryTerms) {
+            String term = queryTerm.term;
+            // Retrieve documents containing the search term
+            // "allDocuments" is a list that has all the documents that have that term
+            PostingsList allDocuments = index.getPostings(term);
+
+            // Loop through all retrieved documents
+            // for each document in this list (of documents that have the term)
+            for (PostingsEntry document : allDocuments.getList()) {
+
+                // Calculate the score for the document
+                // 3.1: multiply by queryTerm.weight
+                double score = calculateTfIdfScore(document, term) * queryTerm.weight;
+
+                // if the document already exists in the list of scores, add the SCORE to it
+                // only
+                if (docScores.containsKey(document)) {
+                    docScores.put(document, docScores.get(document) + score);
+                }
+                // otherwise, put the document in the list of score and its score
+                else {
+                    docScores.put(document, score);
+                }
+            }
+        }
+
+        // a list called results which will be the documents that have the term and
+        // ranked
+        PostingsList results = new PostingsList();
+
+        for (String term : terms) {
+
+            // Retrieve documents containing the search term
+            PostingsList allDocuments = index.getPostings(term);
+
+            // for every doc in this list of doc, if it's not in results list, add it
+            for (PostingsEntry document : allDocuments.getList()) {
+                    results.insert(document);
+            }
+        }
+
+        // for every doc in this list of doc ==> doc Score / doc length
+        for (PostingsEntry document : docScores.keySet()) {
+            document.score = docScores.get(document) / index.docLengths.get(document.docID);
+        }
+
+        // sort the docs by score and put them in results list
+        results.sortByScore();
+        return results;
+    }
+
+    // tf * idf
+    // later, it will be divided by length of the doc (in rankedTfIdf method)
+    private double calculateTfIdfScore(PostingsEntry document, String term) {
+        double tf = getTF(document, term);
+        double idf = getIDF(term);
+        return tf * idf;
+    }
+
+    // calculating the term frequency : number of occurrences of term in doc
+    // how many positions that term has in the doc aka tf
+    public double getTF(PostingsEntry document, String term) {
+        return document.positions.size();
+    }
+
+    // calculating Inverse Document Frequency : idf = log(N/df)
+    private double getIDF(String term) {
+        double N = index.docNames.size(); // number of ALL the documents in the corpus
+        double df = index.getPostings(term).size(); // number of documents in the corpus that contain the term
+        double idf = Math.log(N / df);
+
+        // this print is for task 2.3
+        // System.out.printf(" idf - %s: %f\n", term, Math.round(idf * 10000.0) /
+        // 10000.0);
+
+        return idf; // calculating the idf
+    }
+
+    /* --------------------------------------------- */
+
+
 
     public List<PostingsList> getPostingsLists(Query query) {
         List<PostingsList> postings = new ArrayList<>();
